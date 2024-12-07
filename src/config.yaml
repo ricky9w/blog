@@ -1,40 +1,41 @@
 site:
-  name: AstroWind
-  site: 'https://astrowind.vercel.app'
+  name: Ricky's Blog
+  site: 'https://rezo.fun'
   base: '/'
   trailingSlash: false
 
-  googleSiteVerificationId: orcPxI47GSa-cRvY11tUe6iGg2IO_RPvnA1q95iEM3M
+  googleSiteVerificationId: null # TODO: add google site verification id
 
 # Default SEO metadata
 metadata:
   title:
-    default: AstroWind
-    template: '%s — AstroWind'
-  description: "\U0001F680 Suitable for Startups, Small Business, Sass Websites, Professional Portfolios, Marketing Websites, Landing Pages & Blogs."
+    default: Ricky's Blog
+    template: "%s — Ricky's Blog"
+  # TODO: add description
+  description: "🚀 Ricky's Blog is a blog about AI, programming, PKM and more. I share my knowledge and experience with you."
   robots:
     index: true
     follow: true
   openGraph:
-    site_name: AstroWind
+    site_name: Ricky's Blog
     images:
       - url: '~/assets/images/default.png'
         width: 1200
         height: 628
     type: website
   twitter:
-    handle: '@onwidget'
-    site: '@onwidget'
+    handle: '@rickywang233'
+    site: '@rickywang233'
     cardType: summary_large_image
 
 i18n:
-  language: en
+  language: zh
   textDirection: ltr
 
 apps:
   blog:
     isEnabled: true
-    postsPerPage: 6
+    postsPerPage: 10
 
     post:
       isEnabled: true
@@ -66,7 +67,7 @@ apps:
 analytics:
   vendors:
     googleAnalytics:
-      id: null # or "G-XXXXXXXXXX"
+      id: null # or "G-XXXXXXXXXX" TODO: add google analytics id
 
 ui:
   theme: 'system' # Values: "system" | "light" | "dark" | "light:only" | "dark:only"
