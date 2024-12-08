@@ -1,6 +1,6 @@
 site:
   name: Ricky's Blog
-  site: 'https://rezo.fun'
+  site: 'https://blog.rezo.fun'
   base: '/'
   trailingSlash: false
 
@@ -45,7 +45,7 @@ apps:
 
     list:
       isEnabled: true
-      pathname: 'blog' # Blog main path, you can change this to "articles" (/articles)
+      pathname: 'articles' # Blog main path, you can change this to "articles" (/articles)
       robots:
         index: true
 

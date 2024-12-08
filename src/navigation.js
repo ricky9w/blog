@@ -8,7 +8,7 @@ export const headerData = {
     },
     {
       text: '博客',
-      href: '/blog',
+      href: '/articles',
     },
     {
       text: '关于',
