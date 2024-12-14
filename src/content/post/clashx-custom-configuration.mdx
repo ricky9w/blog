@@ -1,0 +1,98 @@
+---
+publishDate: 2022-10-14T00:00:00Z
+title: clashX 自定义配置文件管理
+excerpt: 机场订阅一般都包含必要的规则集, 但是实际使用中往往需要自定义一些规则. 直接在机场提供的规则中修改, 订阅更新时这些修改也会被覆盖. 好在还有一些方法可以对自定义配置进行分离管理
+tags:
+  - network
+  - GFW
+---
+
+## 概述
+
+Clash 内核支持通过 `proxy-provider` 和 `rule-provider` 从其他文件导入, 因此可以将机场提供的节点和自己的配置文件分别写入不同的文件, 在一个总的配置文件中引用它们, 这样就可以做到这些配置内容分别管理. 如果有多个机场订阅, 还可以通过这种方式将它们聚合.
+
+注意: 仅 Premium 版本内核支持 `rule-provider` 特性.
+
+## 配置
+
+### 获取节点配置
+
+首先从你的机场获取订阅链接, 并通过一些订阅转换工具转换为 `rule-provider` 格式, 示例如:
+
+```bash
+proxy-groups:
+  - name: UseProvider
+    type: select
+    use:
+      - test1
+    proxies:
+      - Proxy
+      - DIRECT
+
+proxy-providers:
+  test1:
+    type: http
+    url: your-url
+    interval: 3600
+    path: ./test1.yaml
+    health-check:
+      enable: true
+      interval: 600
+      # lazy: true
+      url: http://www.gstatic.com/generate_204
+```
+
+我自己托管在 Vercel 上的订阅转换工具:
+
+[Proxy Provider Converter (donnadie.top)](https://sub-convert.donnadie.top/)
+
+将机场提供的订阅链接复制到输入框内就可以自动实现转换, 非常方便.
+
+### 获取规则配置
+
+推荐一个开源的 Clash 规则集:
+
+[Loyalsoldier/clash-rules: 🦄️ 🎃 👻 Clash Premium 规则集(RULE-SET)，兼容 ClashX Pro、Clash for Windows 客户端。 (github.com)](https://github.com/Loyalsoldier/clash-rules)
+
+主页有详细的使用说明和配置示例, 参照之即可. 这里补充一些说明:
+
+- 该规则集使用了三个策略组:
+    - `DIRECT`
+    - `REJECT`
+    - `PROXY`
+    
+    前面两个是clash内核自带的策略组, 第三个则需要自己在 `proxy-groups` 中添加, 即 `proxy-groups` 字段中应该具备如下配置项:
+    
+    ```bash
+    proxy-groups:
+      - name: PROXY
+        type: select
+        use:
+          - foo
+          - bar
+        proxies:
+          - DIRECT
+    ```
+    
+- 该项目提供了白名单和黑名单两种处理未命中规则站点的方式并给出了配置示例:
+    - 白名单: 没有命中规则的流量都走代理, 适合服务器流量充足且线路稳定的用户
+    - 黑名单: 没有命中规则的流量都走直连, 适合服务器流量较少或者服务不太稳定的用户
+- 该项目可以从 [`raw.githubusercontent.com`](http://raw.githubusercontent.com/) 以及 [`cdn.jsdelivr.net`](http://cdn.jsdelivr.net/) 获取, 但是极端情况下这两个地址可能都无法访问, 导致配置拉取失败. 此时可以先从 Release 界面先将配置文件打包下载并保存到对应目录, 配置完成可以科学上网之后就可以自动更新了
+    
+    [Releases · Loyalsoldier/clash-rules (github.com)](https://github.com/Loyalsoldier/clash-rules/releases)
+    
+- 编写配置文件时需要注意 `proxy-providers` , `proxy-groups` 以及 `rule-providers` 三个字段匹配, 且注意 YAML 文件格式缩进等细节问题, 否则会解析出错
+
+## 总结
+
+ClashX 基于 Clash 内核, 上面的配置方法也可以用于其他平台上的 Clash.
+
+将不同配置文件分离开有利于更新和管理的方便, 此外还可以达成聚合来自不同机场的订阅等目的, 非常实用.
+
+## 参考
+
+Clash 的功能和配置说明可以参考项目 Wiki 以及这个文档项目:
+
+[Home · Dreamacro/clash Wiki (github.com)](https://github.com/Dreamacro/clash/wiki)
+
+[Introduce - Clash (gitbook.io)](https://lancellc.gitbook.io/clash/)

@@ -1,0 +1,87 @@
+---
+publishDate: 2023-03-06T00:00:00Z
+title: 部署 clash-tracing 监控 clash 工作情况
+excerpt: 利用 clash-tracing 收集 clash 日志数据并用图形化方式展现出来
+tags:
+  - network
+  - GFW
+---
+
+## 概述
+
+clash-tracing 是 Clash 内核作者推出的 Clash 数据监控服务, 能监控 Clash 的响应速度, 流量等信息.
+
+目前的 clash-tracing 项目利用 websocat 和 vector 从 Clash core 提供的 API 获取数据, 利用 Loki 作为日志数据库, 利用 Grafana 作为面板展示数据.
+
+不过项目自己的说明比较简单, 对新手不太友好, 并且由于项目的不断更新, 网上一些经验已经失效, 我自己部署过程中也踩了一些坑, 在此记录下来, 希望能对他人有所帮助.
+
+## 准备条件
+
+- Clash Premium 内核
+- 安装 Docker
+
+## 部署步骤
+
+### 打开 Clash tracing 开关
+
+在 Clash 配置文件中加入如下内容:
+
+```yaml
+profile:
+	tracing: true
+```
+
+### 部署 Docker
+
+首先将项目克隆到本地. 项目中包含了 Loki, Grafana 等的配置文件, 直接克隆到本地并挂载省得自己配置
+
+其次根据自己的需要对项目中的几个文件进行修改:
+
+- 修改 `.env` 文件, 将其中的变量改为与自己的 clash external controller 相对应
+- 修改 `docker-compose.yml` 文件, 保证其中文件路径与实际情况相对应
+- Grafana 面板默认运行在 3000 端口, 可以在 `docker-compose.yml` 文件中修改
+- Loki 默认运行在 3100 端口, 如需修改则要改动如下几个文件:
+    - `loki/config.yam` : 修改 `server.http_listen_port`
+    - `grafana/provisioning/datasources/clash.yaml` : 修改 `datasources.url` (也可以在面板修改)
+    - `vector/vector.toml` : 修改 `sinks.loki.endpoint`
+    
+    此外, Loki 运行时还会占用 9093 端口, 可以在 `loki/config.yaml` 中修改
+    
+- vector 默认运行在 9000 端口, 如需修改则要改动如下文件:
+    - `docker-compose.yml` : 修改 `traffic_scrapper.command` 和 `tracing_scrapper.command`
+    - `vector/vector.toml` : 修改 `sources.mixed.address`
+
+修改完毕后运行 docker-compse, 输入 `ip:port` 访问 Grafana 面板.
+
+### 配置 Grafana 面板
+
+Grafana 面板默认登录凭据 `admin:admin` , 登录之后建议第一时间修改密码.
+
+进入面板后, 如果已经按照上面的方法正确配置, 应该可以在左侧 `Dashboards` 中看到 Clash 和 Logs 两个面板, 分别是流量等数据的可视化展示, 以及日志的展示.
+
+如果出现错误, 例如看不到面板, 面板中提示 `No Data` 等, 建议从如下几个方面排除故障:
+
+- Clash core 中 tracing 配置是否打开
+    
+    要验证 Clash tracing 工作是否正常, 可以利用 websocat:
+    
+    ```bash
+    websocat "ws://$CLASH_HOST/profile/tracing?token=$CLASH_TOKEN"
+    ```
+    
+    websocat 项目主页:
+    
+    [vi/websocat: Command-line client for WebSockets, like netcat (or curl) for ws:// with advanced socat-like functions (github.com)](https://github.com/vi/websocat)
+    
+- Grafana 面板中, 选择左侧 `Configuration - Data sources` 中查看数据库配置是否正确
+- 各个容器端口有无冲突, 可以通过查看容器日志来判断
+
+各类问题也可以到项目 issue 中找找答案, 例如:
+
+[踩坑记录 · Issue #24 · Dreamacro/clash-tracing (github.com)](https://github.com/Dreamacro/clash-tracing/issues/24)
+
+不过有些经验过去比较久, clash-tracing 变化又比较大, 部分内容已经失效.
+
+## 总结
+
+Grafana 面板默认样式颜值不错, 整个 tracing 项目资源消耗也不太高, 适合用作监控没事看看家里网络运行情况. 不过这也只是 “An example of a clash tracing exporter API”, Clash 提供了不少 API 可供二次开发, 用好的话应该非常强大.

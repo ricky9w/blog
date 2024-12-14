@@ -1,0 +1,137 @@
+---
+publishDate: 2023-08-23T00:00:00Z
+title: Linux 本地化 - locale 变量与设置方法
+excerpt: Linux 中通过 locales 调整语言, 编码以及其他本地化设置, 如果设置不当可能导致乱码等问题. 本文介绍 Linux 中 locales 变量的作用以及 locales 的设置方法
+tags:
+  - os
+---
+
+## 变量介绍
+
+Linux 中 locale 相关变量根据优先级可以分为下面四类:
+
+1. LANGUAGE
+2. LC_ALL
+3. LC_xxx
+4. LANG
+
+下面逐个进行分析.
+
+LANG 变量设置系统显示语言, 例如:
+
+```bash
+export LANG=es_ES.UTF-8
+```
+
+将系统语言设置为 `es_ES` 并使用 `UTF-8` 编码. 此时系统显示语言变为西班牙语, 各种显示输出也变为西班牙语.
+
+一般而言, 使用 `LANG` 变量设置系统的默认语言.
+
+LC_xxx 包含一系列变量, 分别控制系统中各种本地化设置, 全部设置参考末尾的说明.
+
+常见的 LC_xxx 类设置有 `LC_TIME` 指定时间格式, `LC_MESSAGES` 指定系统输出的消息的语言, `LC_NUMERIC` 指定数字格式等. 注意 `LC_TIME` 只是指定时间格式, 并没有指定时区或者修改时间设置.
+
+LC_xxx 优先级比 LANG 更高, 会覆盖 LANG 中指定的系统默认设置.
+
+LC_ALL 优先级比 LC_xxx 更高, 当设置了 LC_ALL 之后对 LC_xxx 的修改将不会生效.
+
+一般而言, LC_ALL 用于临时修改 locale 相关设置以完成特定任务, LC_xxx 则可以用于对某一项设置进行精细设置.
+
+LANGUAGE 主要用于对系统语言设置一个备选优先级, 例如设置一个首选语言, 在首选语言不可用时 fallback 到其他语言等. 例如:
+
+```bash
+LANGUAGE=en_US:en_GB:fr_FR
+```
+
+Linux 系统有一个默认自带的特殊 locale: “C”, 又称 “POSIX” locale, 是一种最小最基本的 locale. 此时字符编码, 排序 (字符会按照 ASCII 编码排序) 都保留在最低限度, 不使用任何本地化相关功能, 产生最简单且一致的行为.
+
+可以使用 `locale` 命令查看系统的所有 locale 相关的设置:
+
+```bash
+$ locale
+LANG=es_ES.UTF-8
+LANGUAGE=en_US
+LC_CTYPE="en_EN.UTF-8"
+LC_NUMERIC="en_EN.UTF-8"
+LC_TIME="en_EN.UTF-8"
+LC_COLLATE="en_EN.UTF-8"
+LC_MONETARY="en_EN.UTF-8"
+LC_MESSAGES="en_EN.UTF-8"
+LC_PAPER="en_EN.UTF-8"
+LC_NAME="en_EN.UTF-8"
+LC_ADDRESS="en_EN.UTF-8"
+LC_TELEPHONE="en_EN.UTF-8"
+LC_MEASUREMENT="en_EN.UTF-8"
+LC_IDENTIFICATION="en_EN.UTF-8"
+LC_ALL=en_EN.UTF-8
+```
+
+可以使用 `locale -a` 命令查看当前系统中已有的 locale:
+
+```bash
+$ locale -a
+C
+C.utf8
+en_US.utf8
+POSIX
+```
+
+## 设置方法
+
+### 生成 locale
+
+两种生成所需 locale 的方法: 交互式和修改配置文件.
+
+要使用交互式菜单生成所需 locale, 执行:
+
+```bash
+dpkg-reconfigure locales
+```
+
+该命令会启动一个交互式菜单, 首先勾选自己所需的 locale, 随后设置系统默认 locale, 完成后系统会生成所需的 locale 并设置系统默认的 locale.
+
+要从命令行直接生成所需的 locale, 修改 `/etc/locale.gen` 文件, 将所需的 locale 取消注释, 随后执行:
+
+```bash
+locale-gen
+```
+
+生成相应 locale 即可.
+
+也可以直接使用 `locale-gen` 生成指定 locale:
+
+```bash
+locale-gen en_US.UTF-8
+```
+
+### 设置 locale
+
+要为用户设置 locale, 一般可以编辑 `~/.bashrc` 或者 `~/.zshrc` 等文件, 加入:
+
+```bash
+export LANG=en_US.UTF-8
+export LC_ALL=en_US.UTF-8
+```
+
+要设置系统 locale, 编辑 `/etc/default/locale` 文件并加入:
+
+```bash
+LANG=en_US.UTF-8
+LC_ALL=en_US.UTF-8
+```
+
+要让 locale 修改立即生效, 可以重新登录, 重启 Shell 或者使用:
+
+```bash
+update-locale LANG=en_US.UTF-8
+```
+
+## 参考
+
+[Locale Environment Variables in Linux | Baeldung on Linux](https://www.baeldung.com/linux/locale-environment-variables#2-lcxxx)
+
+[Linux “C” locale - ChatGPT](https://chat.openai.com/share/fa34f747-6e0d-417f-b06a-614037ff3b3c)
+
+[Human Language (Locale) Selection](https://tldp.org/HOWTO/Secure-Programs-HOWTO/locale.html)
+
+[environment variables - What does "LC_ALL=C" do? - Unix & Linux Stack Exchange](https://unix.stackexchange.com/questions/87745/what-does-lc-all-c-do)

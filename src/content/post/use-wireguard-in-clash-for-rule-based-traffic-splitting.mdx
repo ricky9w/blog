@@ -1,0 +1,90 @@
+---
+publishDate: 2023-02-14T00:00:00Z
+title: 在 Clash 中配置和使用 wireguard 实现基于规则的分流
+excerpt: 将 Clash 和 wireguard 结合使用, 实现更加方便和强大的基于规则的分流
+tags:
+  - network
+  - GFW
+---
+
+Wireguard 是简单强大的 VPN 工具, 且目前主流操作系统都对其提供内核支持. 但是简单的设计也导致它没有比较完善的分流, DNS 等功能, 作为上网工具来说用起来还是有诸多不便.
+
+Clash 则有非常完善的基于规则的分流机制以及 DNS 功能, 也是我的主力上网工具, 如果能将 Clash 的这些功能和 wireguard 结合起来就完美了.
+
+Clash Premium 从 2022.11.25 版本开始支持 wireguard, 在用户空间实现了 wireguard 协议栈, 将 Clash 和 wireguard 结合使用变得更方便了. 此前的版本, 则可以通过 proxy group 选择出口网卡的方式将 Clash 和 wireguard 结合使用. 一下分别简述两种使用方式的配置方法.
+
+## 直接使用 (Clash Premium 2022.11.25+)
+
+新版本 Clash 在用户空间实现了 wireguard 协议栈, 配置起来更加方便, 具体配置语法如下:
+
+```yaml
+proxies:
+  - name: "wg"
+    type: wireguard
+    server: 127.0.0.1 #服务器地址, 目前仅支持 IP 不支持域名, IPv4 和 IPv6 均可
+    port: 443 # wireguard 服务器监听地址
+    ip: 172.16.0.2 # 本机 wireguard 内网 IPv4 地址
+    # ipv6: your_ipv6 # 本机 wireguard 内网 IPv6 地址
+    private-key: eCtXsJZ27+4PbhDkHnB923tkUn2Gj59wZw5wFA75MnU= # 本机私钥
+    public-key: Cr8hWlKvtDt7nrvf+f0brNQQzabAqrjfBvas9pmowjo= # 服务器公钥
+    # preshared-key: base64 # 预分享密钥
+    # dns: [1.1.1.1, 8.8.8.8]
+    # mtu: 1420
+    udp: true # 是否允许 UDP
+```
+
+配置参考:
+
+[Clash Premium Features · Dreamacro/clash Wiki (github.com)](https://github.com/Dreamacro/clash/wiki/Clash-Premium-Features#proxy)
+
+[Release Premium 2023.01.29 · Dreamacro/clash (github.com)](https://github.com/Dreamacro/clash/releases/premium)
+
+注意, 如果要使用 IPv6, 需要在配置文件 `config.yaml` 中将 `ipv6` 和 `dns.ipv6` 两处设置为 `true` , 相关问题参考这个 issue:
+
+[[Feature] Domain name support in endpoint field for WireGuard protocol in Clash Premium · Issue #2551 · Dreamacro/clash (github.com)](https://github.com/Dreamacro/clash/issues/2551)
+
+## Proxy Group 选择出口网卡
+
+wireguard 运行在第三层 (OSI), 它会创建一个虚拟网卡, 因此可以利用 Proxy Group 指定流量出口, 从而达到将流量分录到 wireguard 的目的. 这种方法配置起来相对更复杂, 适用场景包括但不限于如下所列:
+
+- 开源版本 Clash core (不支持上面的 wireguard 实现)
+- 性能敏感场景, 对用户空间协议栈的性能或效率不满意, 希望使用内核级 wireguard 支持
+- 将 wireguard 作为服务器运行, 接受其他节点的连接. 目前 Clash 仅实现了 wireguard outbound, 如果机器本身需要将 wireguard 作为服务器接受其他主机的连接, 则最好采用接下来的方式实现
+
+具体来说, 假定你的 `wg0.conf` 文件如下:
+
+```yaml
+[Interface]
+PrivateKey = ...
+Address = 172.16.0.1/32
+MTU = ...
+Table = 6666
+PostUp = ip rule add from 172.16.0.1/32 table 6666
+
+[Peer]
+AllowedIPs = 0.0.0.0/0
+AllowedIPs = ::/0
+PublicKey = ...
+Endpoint = ...
+```
+
+运行时, 系统中将有一个 `wg0` 虚拟网卡, 这就是 wireguard 创建的虚拟网卡, 现在就是要将流量分流到该网卡出站.
+
+在 Clash 中添加一个 wireguard 策略组:
+
+```yaml
+proxy-groups:
+  - name: Wireguard
+    type: select
+    interface-name: wg0
+    proxies:
+      - DIRECT
+rules:
+  - DOMAIN,google.com,Wireguard
+```
+
+这样就可以非常方便地实现分流.
+
+参考:
+
+[Examples · Dreamacro/clash Wiki (github.com)](https://github.com/Dreamacro/clash/wiki/Examples#rule-based-wireguard)

@@ -1,0 +1,119 @@
+---
+publishDate: 2023-03-31T00:00:00Z
+title: 通过合理的 Clash DNS 和规则配置对抗 DNS 污染和泄漏
+excerpt: 国内的 DNS 环境比较复杂, 只有通过合理的 DNS 和规则配置才能对抗 DNS 污染并防止 DNS 泄漏, 从而顺畅上网并规避隐私风险
+tags:
+  - network
+  - GFW
+---
+
+上一篇文章简单分析过 Clash 在 fake-ip 模式下的 DNS 工作过程, 并指出了规则配置中可能导致 DNS 泄漏的部分, 这篇文章针对如何进行合理的 DNS 和规则集配置给出一些建议.
+
+## 尽可能避免本地 DNS 解析
+
+避免 DNS 泄漏釜底抽薪的方式就是避免对需要被代理的域名的本地 DNS 解析. Clash 并不支持代理 DNS 请求, 那么这一点如何做到呢?
+
+### 通过完善的规则集覆盖需要代理的域名
+
+读过上一篇文章, 理解了 Clash fake-ip 模式的原理之后就会发现, 只要规则集能够覆盖常用的需要代理的域名就可以避免对这些域名的本地 DNS 解析:
+
+> Clash 进行本地 DNS 解析仅仅为了匹配规则, 所以如果这些域名已经命中域名规则, 就会直接被发给代理服务器.
+> 
+
+### 谨慎对待 IP 类规则防止产生意料外的解析
+
+IP 类规则 (GEOIP, IP-CIDR, IP-CIDR6) 如果后面不加 `no-resolve` 选项, 则 Clash 在进行匹配时会进行本地 DNS 解析获取 IP 用于该规则的匹配, 从而导致可能的 DNS 泄漏.
+
+因此, 务必保证需要代理的域名已经在所有未设置 `no-resolve` 选项的 IP 类规则前已经被命中.
+
+经常被忽视的几个场景:
+
+- rule-provider, 尤其是 behavior 为 `classical` 的: 大部分人并不会自己审查自己所用的第三方 `rule-provider` , 可能有的 provider 中有 IP 类规则, 且被用在了靠前的位置, 这可能导致 DNS 泄漏. 因此使用 rule-provider 前最好仔细检查
+- script 和 script-shortcut: 脚本规则自由度更高, 出问题的概率也就更大, 因此编写脚本需要更加小心谨慎
+
+## 不要盲信公共 DNS
+
+正如上面一节所说, 解决 DNS 泄漏问题最好的方案还是避免本地 DNS 解析, 盲目使用公共 DNS (在 fake-ip 模式下) 往往并不能避免 DNS 泄漏和改善浏览体验, 反而造成负优化.
+
+> 当然, 此处的建议仅仅针对**运行在 fake-ip 下的 Clash** (或许包括 Surge 等), 如果你并不打算使用代理软件, 那么选择一个可用性好, 污染少的公共 DNS 还是很能提升体验的
+> 
+
+### 海外公共 DNS 的可用性问题
+
+由于特殊原因, 一些著名的国外公共 DNS 在国内很多地区有可用性问题, 明文查询可能会被抢答/篡改, DoH 和 DoT 可能会被阻断, 就算没有以上情况, 它们的响应速度往往堪忧, 使用体验并不好.
+
+此外, 由于大部分国外公共 DNS 并没有针对国内做优化, 因此使用它们返回的结果可能导致绕路, 例如给你返回国内网站在国外的 CDN 地址.
+
+### 使用海外公共 DNS 可能并无帮助
+
+- 假设在 `nameserver` 中配置了国内 DNS, 在 `fallback` 中配置了海外 DNS, 由于 Clash 进行本地 DNS 解析时并行请求, 因此这样做并不能避免 DNS 泄漏
+- fake-ip 的工作原理决定了, 只要规则配置合理, Clash 在本地即使拿到了受污染的 IP 也仍然能正常访问海外网站
+    
+    当然, 不排除某些极端情形会使默认的 fallback 策略失效, 但即便如此也有 `fallback-filter` 等措施来尽可能减轻这种情形带来的影响
+    
+
+### 公共 DNS 对 CDN 的负优化
+
+由于国内复杂的网络环境, 很难保证公共 DNS 对各个不同地区的良好支持, 因此盲目使用国内公共 DNS 也可能带来对 CDN 的负优化问题 (比如北京连接到深圳…).
+
+### 明文 DNS 查询被劫持的问题
+
+DNS 查询默认基于明文的 UDP 协议, 因此很容易被劫持. 在这种情形下, 即使配置了公共 DNS, ISP 也可以偷窥用户的 DNS 请求, 甚至进行 DNS 抢答和篡改.
+
+### 公共 DNS 的隐私问题
+
+国内很多公共 DNS 可能出于各种原因保留 DNS 查询日志, 这可能带来一些隐私问题.
+
+## 简单的建议和总结
+
+在 `nameserver` 模块, 可以选择速度更快的, CDN 优化更好的 DNS 服务器 (甚至 ISP 分配的服务器), 以便在直连国内网站时获得良好的 DNS 解析速度和 CDN 优化.
+
+对于 `fallback` 模块, 在 fake-ip 模式下也不需要强求其无污染, 选择速度较快且信得过的公共 DNS 即可. 当然, 如果 Google, Cloudflare 的 DoH, DoT 等服务在你的网络环境中可以的话, 用它们显然更好.
+
+一些特殊情形下使用信得过的公共 DNS 可能会带来更好的体验:
+
+1. 极端情形下, ISP 会将某些域名的 DNS 污染到国内 IP, 此时默认的 fallback 机制失效. 如果恰好这个域名没有命中规则, 而是在最后匹配到 IPCIDR 类规则走直连, 则会导致问题.
+    
+    例如, 在某个国内 IP 上搭建一个高仿谷歌网站, 然后将 [`google.com`](http://google.com) 的 DNS 污染到这个 IP, 于是你访问 Google 时将会来到这个高仿谷歌, 此时浏览器一般会提示证书错误. 无论何时, 在浏览器提示证书错误时一定要小心谨慎, 因为你可能在遭受各种形式的网络攻击.
+    
+    当然, 这种情况非常刁钻, 因为绝大部分规则集会在这种情况出现之前命中分流规则, 不会受 DNS 污染的影响, 因此合理的规则配置往往比 DNS 服务器配置更重要. 当然, 在 `nameserver` 中填入靠谱的 DNS 服务器能够很大程度上避免这种情况发生.
+    
+2. 又是一种极端情形, 比如某校买了某些在线学术资源, 需要直连访问这些资源, 因此你在规则中将这个域名配置成了直连. 但是, 学校的大聪明 DNS 服务器对这个域名返回了被污染的结果.
+    
+    如果你仅仅配置了 `nameserver` 服务器而没有配置 `fallback`, 并且 Clash 最终采用了学校 DNS 服务器的结果, 此时是无法访问该学术资源的.
+    
+3. 如果你不希望自己的 DNS 查询记录被单位网管获知, 使用 Clash 内置的 DNS 服务器并进行一些合理配置还是很有用的. 当然, 仅仅是不对单位服务器发起 DNS 查询离摸鱼自由还有很远, 只要你的流量从单位网关走, 有太多种方法发现你的异常行为 (科学上网同理)
+
+前面 “不要盲信公共 DNS” 一节, 只是对很多无脑选择公共 DNS 的观点作了一些拨乱反正, 简单列举了公共 DNS 可能存在的问题, 并顺便为 ISP 分配的 DNS 平反, 而非要强调不能使用公共 DNS. 实际应用中, 应该根据你的网络环境和需求, 具体情况具体分析.
+
+Clash 的 DNS 模块功能很强大, 例如并行请求选最快的结果, 例如对 DoH, DoT, DoQ 等协议的支持, 合理配置可以在国内复杂的 DNS 环境中大大提升网络使用体验.
+
+但是对于对抗 DNS 污染和防止 DNS 泄漏来说, 合理的规则配置可能比 DNS 配置更加重要 (fake-ip 模式下).
+
+## 参考
+
+CFW 的这篇 wiki 对 DNS 污染给 Clash 带来的影响讲解得比较详细:
+
+[DNS污染对Clash（for Windows）的影响 · Fndroid/clash_for_windows_pkg Wiki (github.com)](https://github.com/Fndroid/clash_for_windows_pkg/wiki/DNS%E6%B1%A1%E6%9F%93%E5%AF%B9Clash%EF%BC%88for-Windows%EF%BC%89%E7%9A%84%E5%BD%B1%E5%93%8D)
+
+Ephen 的两篇博客对于使用公共 DNS 上网的弊端做了详细的介绍:
+
+[使用公共 DNS 上网的弊端（一） | Ephen‘s Blog](https://ephen.me/2017/PublicDns_1/)
+
+[使用公共 DNS 上网的弊端（二） | Ephen‘s Blog](https://ephen.me/2017/PublicDns_2/)
+
+Fake-ip 模式的 RFC 文件:
+
+[RFC 3089: A SOCKS-based IPv6/IPv4 Gateway Mechanism (rfc-editor.org)](https://www.rfc-editor.org/rfc/rfc3089)
+
+Sukka 这篇关于 DNS 配置方案的博客很有见地:
+
+[我有特别的 DNS 配置和使用技巧 | Sukka's Blog (skk.moe)](https://blog.skk.moe/post/i-have-my-unique-dns-setup/)
+
+要了解 Clash 的 DNS 和规则配置, 还是参考 Clash wiki:
+
+[Configuration · Dreamacro/clash Wiki (github.com)](https://github.com/Dreamacro/clash/wiki/Configuration)
+
+如果要使用 rule-provider 和 script (需要 Premium 内核支持), wiki 中对 Premium Features 的介绍也值得一看:
+
+[Clash Premium Features · Dreamacro/clash Wiki (github.com)](https://github.com/Dreamacro/clash/wiki/Clash-Premium-Features)

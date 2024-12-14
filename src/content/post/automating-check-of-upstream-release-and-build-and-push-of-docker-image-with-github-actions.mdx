@@ -1,0 +1,116 @@
+---
+publishDate: 2023-02-16T00:00:00Z
+title: 利用 GitHub Actions 自动化上游发布检查和 Docker 镜像构建推送
+excerpt: 利用 GitHub Actions 自动检查上游最新的发布, 构建 Docker 镜像并推送到 DockerHub
+tags:
+  - dev
+---
+
+## 概述
+
+最近在玩 Mindustry, 这个游戏可玩性很高, 并且还提供服务器端, 可以自己搭建服务器进行多人游戏. 项目只提供了服务器端程序的 jar 包, 为了方便部署和管理我还是更希望将其打包成 Docker 镜像. 不过现有的 Docker 镜像要么部署太繁琐, 要么版本更新不及时, 于是决定自己构建并维护一个 Docker 镜像, 在上游有新的发布时自动重新构建并推送到 DockerHub.
+
+不过游戏版本发布非常频繁, 人力维护显然不现实, 于是想到可以利用 GitHub Action 自动化完成工作.
+
+## 思路
+
+这个任务的难点在于, 我们要及时获取上游项目 `anuken/mindustry` 的最新发布, 并以此触发构建, 但是我们并没有上游项目的权限, 因此需要用其他方式来曲线救国.
+
+具体来说, 可以在项目中创建一个文件保存上游版本号, 配置一个 workflow 定期获取上游最新版本号并与文件中的进行对比, 如果上游版本更新则将最新的版本号写入该文件
+
+## 获取 GitHub Fine-grained Token
+
+原先的 Personal Access Token 无法按照 repo 的粒度划分权限, 新出的 fine-grained token 则可以, 那当然是用后者更好, 创建方式参考:
+
+[Creating a personal access token - GitHub Docs](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/creating-a-personal-access-token#creating-a-fine-grained-personal-access-token)
+
+创建完成后将 token 加入到 secrets 中.
+
+在 fine-grained token 出现之前, 也可以通过 GitHub App 的方式曲线救国来创建 per repo token, 具体方式参考:
+
+[Get a repo-scoped GitHub Access Token quickly - Wes Bos](https://wesbos.com/scoped-github-access-token)
+
+[How to Create a Repo-scoped Github Access Token in an Organization Account | Micah Engle-Eshleman (micahjon.com)](https://micahjon.com/2021/repo-scoped-access-token-for-github-org/)
+
+注意文中的 `InstallationId` 在 GitHub App 的 URL 中. 当然, 这种方法还是过于繁琐, 还是更建议使用前面的方法.
+
+## 获取 Docker Hub Access Token
+
+要让 GitHub Actions 拥有仓库访问权限, 同样需要创建 token, 参考:
+
+[Manage access tokens | Docker Documentation](https://docs.docker.com/docker-hub/access-tokens/)
+
+创建完成后将用户名和 token 都加入到 secrets 中.
+
+## 定期检查上游是否有新的发布
+
+具体原理思路部分已经说过了, 这里直接放代码:
+
+[mindustry-server-docker/check-versions.yml at master · ricky9w/mindustry-server-docker (github.com)](https://github.com/ricky9w/mindustry-server-docker/blob/master/.github/workflows/check-versions.yml)
+
+参考:
+
+[Trigger a GitHub Action when another repository creates a new release - Stack Overflow](https://stackoverflow.com/questions/58465057/trigger-a-github-action-when-another-repository-creates-a-new-release)
+
+## 构建镜像并上传 Docker Hub
+
+GitHub Actions 市场里有很多已经写好的组件, 可以直接使用, 直接放代码:
+
+[mindustry-server-docker/docker-image.yml at master · ricky9w/mindustry-server-docker (github.com)](https://github.com/ricky9w/mindustry-server-docker/blob/master/.github/workflows/docker-image.yml)
+
+参考:
+
+[利用GitHub Actions自动构建项目的docker镜像并发布到DockerHub | 二丫讲梵 (eryajf.net)](https://wiki.eryajf.net/pages/5baf0a/)
+
+## 总结与补充
+
+一个 Action 如果想要允许手动运行可在 `on` 部分加上这样的内容:
+
+```yaml
+on:
+  push:
+    branches:
+      - main
+# Allows you to run this workflow manually from the Actions tab
+  # 可以手动触发
+  workflow_dispatch:
+    inputs:
+      logLevel:
+        description: 'Log level'
+        required: true
+        default: 'warning'
+      tags:
+        description: 'Test scenario tags'
+```
+
+要赋值给某个变量以便后续使用可以使用 `set-output` 函数:
+
+```python
+echo "::set-output name=today::$(date +'%Y-%m-%d_%H-%M')"
+```
+
+这样就将当前日期赋给了 today 这个变量.
+
+不过现在该函数已经处于 deprecated 状态:
+
+[GitHub Actions: Deprecating save-state and set-output commands | GitHub Changelog](https://github.blog/changelog/2022-10-11-github-actions-deprecating-save-state-and-set-output-commands/)
+
+不过新的用法也非常简洁明了, 将 `save-state` 和 `set-output` 原先的用法:
+
+```yaml
+- name: Save state
+  run: echo "::save-state name={name}::{value}"
+
+- name: Set output
+  run: echo "::set-output name={name}::{value}"
+```
+
+替换成:
+
+```yaml
+- name: Save state
+  run: echo "{name}={value}" >> $GITHUB_STATE
+
+- name: Set output
+  run: echo "{name}={value}" >> $GITHUB_OUTPUT
+```

@@ -1,0 +1,90 @@
+---
+publishDate: 2022-10-21T00:00:00Z
+title: 为 git 设置代理解决远程仓库无法连接问题
+excerpt: 由于一些众所周知的原因, 国内直连 GitHub 经常遇到问题, 为 git 设置代理可以解决该问题
+tags:
+  - network
+  - GFW
+---
+
+## 准备工作
+
+运行在本机或者其他机器的 http 或者 socks5 代理.
+
+常用的代理客户端如 Clash (以及各种基于 Clash 内核的客户端), V2Ray (以及各种基于 V2Ray 内核的客户端), Quantumult X 等.
+
+## 配置 http 代理
+
+git 默认不使用系统代理, 因此通常情况下即使浏览器中可以访问 GitHub 网页, 也无法用 git 连接到 GitHub 仓库.
+
+为 git 配置代理:
+
+```bash
+# 配置socks5代理
+git config --global http.proxy 'socks5://127.0.0.1:1080'
+git config --global https.proxy 'socks5://127.0.0.1:1080'
+# 配置http代理
+git config --global http.proxy 'http://127.0.0.1:1080'
+git config --global https.proxy 'https://127.0.0.1:1080'
+```
+
+注意如下几点：
+
+- socks5和http两种协议由你使用的代理软件决定，不同软件对这两种协议的支持不一，如果不确定可以都尝试一下
+- 命令中的主机号 (上面的 `127.0.0.1` )是你使用的代理的主机号，如果代理软件运行在本机则填入`127.0.0.1`即可，否则填入代理主机IP
+- 命令中的端口号为代理软件或代理主机的监听IP，同样可以从代理软件配置中获得
+
+也可以指定代理的作用域:
+
+```bash
+#只对github.com
+git config --global http.https://github.com.proxy socks5://127.0.0.1:1080
+```
+
+取消代理:
+
+```bash
+#取消代理
+git config --global --unset http.https://github.com.proxy
+```
+
+## 配置 ssh 代理
+
+用 HTTP 协议链接 GitHub 仓库每次 push, pull 等操作都要验证密码, 非常麻烦. 使用 SSH 协议可以避免这个问题. SSH 代理需要单独配置.
+
+### Windows
+
+Windows 平台的 git 内置了 `connect.exe` 程序, 用于接管 git 流量. 可以修改 SSH 配置让 git SSH 流量走代理.
+
+Windows 的 SSH 配置在 `C:\Users\$USERNAME$\.ssh\config` 文件, 其中 `$USERNAME$` 是你的用户名.
+
+在文件中加入下列配置:
+
+```bash
+Host github.com *.github.com # 指定代理规则作用域
+  User git
+  Port 22 # 端口号
+  # 自己的私钥所在路径
+  IdentityFile "~\.ssh\id_rsa"
+  # SOCKS代理设置方法
+  ProxyCommand connect -S 127.0.0.1:7890 %h %p
+  # HTTPS代理设置方法
+  ProxyCommand connect -H 127.0.0.1:7890 %h %p
+```
+
+选择 HTTP 代理还是 SOCKS 代理根据你的代理软件提供的功能而定.
+
+### macOS, Linux
+
+类 UNIX 系统配置更改起来比较简单. 编辑 `~/.ssh/config` 加入如下内容:
+
+```bash
+Host github.com *.github.com
+  User git
+  Port 22
+  IdentityFile "~\.ssh\id_rsa"
+  # SOCKS代理
+  ProxyCommand nc -v -x 127.0.0.1:7890 %h %p
+  # HTTPS代理
+  ProxyCommand socat - PROXY:127.0.0.1:%h:%p,proxyport=7890
+```

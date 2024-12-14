@@ -1,0 +1,156 @@
+---
+publishDate: 2022-10-19T00:00:00Z
+title: Clash, ShadowSocks 和 V2Ray 订阅链接与订阅转换
+excerpt: 网上有很多订阅转换服务, 从机场获得的订阅链接只要转换一下就能得到 Clash 的订阅, 这里简单讨论一下这些订阅转换的原理
+tags:
+  - network
+  - GFW
+---
+
+## 订阅链接
+
+早期很多机场会直接提供完整的配置文件供用户下载, 在浏览器中访问机场提供的订阅链接可以看到就是一份完整的 Clash 配置文件. 不过这种方式需要传输的数据量不小, 并且随着规则集越来越复杂全面, 配置文件的体积也在膨胀, 直接提供完整配置文件的方式逐渐过时.
+
+现在很多机场则不提供完整的 Clash 配置文件. 如果在浏览器里打开他们提供的订阅链接, 你将会看到一长串字母和数字的组合, 熟悉编程的朋友应该很快能反应过来, 这不就是 Base64 编码嘛…现在很多机场都只提供 Base64 编码格式的节点信息, 由代理客户端软件 (Clash for Windows, ClashX, V2RayW 等) 根据这些节点信息自己生成配置文件. 这种做法大大减小了数据传输量, 效率更高.
+
+## URI Scheme
+
+ShadowSocks (ss), Vmess 和 Trojan-go 都有自己相对统一的链接格式. 一个链接就包含了某个节点的全部信息, 导入到支持的客户端就可以直接使用. 此外, 部分软件还支持二维码订阅, 也就是将链接做成二维码, 扫码就可以获取节点信息.
+
+### ShadowSocks
+
+ShadowSocks 目前有两种 URI Scheme. 下面是目前最新的 SIP002 URI Scheme:
+
+```
+SS-URI = "ss://" userinfo "@" hostname ":" port [ "/" ] [ "?" plugin ] [ "#" tag ]
+userinfo = websafe-base64-encode-utf8(method  ":" password)
+           method ":" password
+```
+
+[SIP002 URI Scheme · shadowsocks/shadowsocks-org Wiki (github.com)](https://github.com/shadowsocks/shadowsocks-org/wiki/SIP002-URI-Scheme)
+
+[Shadowsocks · Project V 官方网站 (v2ray.com)](https://www.v2ray.com/chapter_02/protocols/shadowsocks.html)
+
+示例 (Base64 编码):
+
+- `ss://YWVzLTEyOC1nY206dGVzdA@192.168.100.1:8888#Example1`
+- `ss://cmM0LW1kNTpwYXNzd2Q@192.168.100.1:8888/?plugin=obfs-local%3Bobfs%3Dhttp#Example2`
+
+示例 (明文):
+
+- `ss://2022-blake3-aes-256-gcm:YctPZ6U7xPPcU%2Bgp3u%2B0tx%2FtRizJN9K8y%2BuKlW2qjlI%3D@192.168.100.1:8888#Example3`
+- `ss://2022-blake3-aes-256-gcm:YctPZ6U7xPPcU%2Bgp3u%2B0tx%2FtRizJN9K8y%2BuKlW2qjlI%3D@192.168.100.1:8888/?plugin=v2ray-plugin%3Bserver#Example3`
+
+### Trojan-go
+
+Trojan-go 的 URI Scheme 如下:
+
+```
+trojan-go://
+    $(trojan-password)
+    @
+    trojan-host
+    :
+    port
+?
+    sni=$(update.microsoft.com)&
+    type=$(original|ws|h2|h2+ws)& 
+        host=$(update-01.microsoft.com)&
+        path=$(/update/whatever)&
+    encryption=$(ss;aes-256-gcm:ss-password)&
+    plugin=$(...)
+#$(descriptive-text)
+```
+
+[trojan-go:// 分享链接规范 · Issue #132 · p4gefau1t/trojan-go (github.com)](https://github.com/p4gefau1t/trojan-go/issues/132)
+
+[URL方案（草案） - Trojan-Go Docs (p4gefau1t.github.io)](https://p4gefau1t.github.io/trojan-go/developer/url/)
+
+### Vmess
+
+Vmess 分享标准相对混乱, 不同代理客户端有各自支持的格式, 这些格式之间也略有出入:
+
+- V2RayN 格式
+    
+    ```
+    vmess://(Base64编码的json格式服务器数据)
+    ```
+    
+- ShadowRocket 格式
+    
+    ```
+    vmess://base64([cipher]:[uuid]@[host]:[port])?remarks=queryEscape([name])
+    ```
+    
+- Quantumult 格式
+    
+    ```
+    vmess=[host]:[port], method=[method], password=[uuid], tag=[tag]
+    ```
+    
+
+[分享链接格式说明(ver 2) · 2dust/v2rayN Wiki (github.com)](https://github.com/2dust/v2rayN/wiki/%E5%88%86%E4%BA%AB%E9%93%BE%E6%8E%A5%E6%A0%BC%E5%BC%8F%E8%AF%B4%E6%98%8E(ver-2))
+
+[Shadowsocks / vmess 协议相关周边程式 URI Scheme - TERRYCHAN.ME](https://blog.terrychan.me/2020/shadowsocks-vmess-uri-scheme)
+
+有的客户端支持多种订阅链接, 但是也有的客户端仅支持某一种订阅链接.
+
+### Hysteria2
+
+Hysteria2 的 URI-scheme 如下:
+
+```
+hysteria2://[auth@]hostname[:port]/?[key=value]&[key=value]...
+```
+
+[URI Scheme - Hysteria 2](https://v2.hysteria.network/docs/developers/URI-Scheme/)
+
+### Vless
+
+Vless 的 URI scheme 提案如下:
+
+[VMessAEAD / VLESS 分享链接标准提案 · Issue #91 · XTLS/Xray-core](https://github.com/XTLS/Xray-core/issues/91)
+
+这里有一个转换代码:
+
+[ImanSeyed/v2ray-uri2json: Convert your vmess/vless/trojan URI to a JSON file.](https://github.com/ImanSeyed/v2ray-uri2json/tree/master)
+
+## 订阅编码
+
+由于代理协议和代理客户端都由社区中的不同开发者进行开发维护, 因此订阅链接往往也非常混乱, 对于标准的更新往往也不同步. 不过不管怎么样, 我们最终得到了一些以 `ss://` , `trojan-go://` 或者 `vmess://` 开头的订阅链接, 其中包含了节点和用户信息.
+
+机场做的下一个工作就是将这些订阅链接放在一起, 再进行一次 Base64 编码. 编码之后就可以托管在服务器上让用户访问获取了.
+
+## 订阅转换
+
+理解了上面各个协议的订阅编码过程, 订阅转换也就很好理解了.
+
+Clash 配置文件为 YAML 格式, 主要包含三个部分的信息:
+
+- 代理配置: 包括暴露的代理端口, DNS 配置等
+- 节点配置: 代理服务器地址, 端口号和用户信息
+- 规则配置: 分流规则配置, 决定哪些流量直连/阻断/代理
+
+订阅转换服务, 其实就是解析机场提供的节点信息, 并加上一些代理配置和规则配置, 最终生成一份完整的 Clash 订阅的过程.
+
+V2Ray 的各种客户端支持的配置文件一般为 JSON 格式, 各种订阅转换服务所做的事情也是类似的, 将节点信息加上其他必要配置最终生成一份完整的 JSON 格式的配置.
+
+网上有不少订阅转换服务, 用起来简单方便, 不过也有人担心流量被偷跑的问题 (事实上可以做到并确实发生过). 如果担心安全性问题, GitHub 上也有很多开源的订阅转换服务, 可以自己在本地运行或者托管到服务器. 放两个链接:
+
+[tindy2013/subconverter: Utility to convert between various subscription format (github.com)](https://github.com/tindy2013/subconverter)
+
+[qier222/proxy-provider-converter: 一个可以将 Clash 订阅转换成 Proxy Provider 和 External Group(Surge) 的工具 (github.com)](https://github.com/qier222/proxy-provider-converter)
+
+## 参考
+
+[Shadowsocks / vmess 协议相关周边程式 URI Scheme - TERRYCHAN.ME](https://blog.terrychan.me/2020/shadowsocks-vmess-uri-scheme)
+
+[Clash定制链接,如何PHP制作ss/ssr/v2ray等订阅节点(包括采用Google Drive方式制作节点订阅链接),综合应用 - Linuxword Global](https://linuxword.com/?p=3430)
+
+[VMessAEAD / VLESS 分享链接标准提案 · Issue #91 · XTLS/Xray-core (github.com)](https://github.com/XTLS/Xray-core/issues/91)
+
+[期望ss2022分享链接能与之前保持相同策略 · Issue #1557 · 2dust/v2rayNG (github.com)](https://github.com/2dust/v2rayNG/issues/1557)
+
+[分享链接格式说明(ver 2) · 2dust/v2rayN Wiki (github.com)](https://github.com/2dust/v2rayN/wiki/%E5%88%86%E4%BA%AB%E9%93%BE%E6%8E%A5%E6%A0%BC%E5%BC%8F%E8%AF%B4%E6%98%8E(ver-2)#%E5%88%86%E4%BA%AB%E7%9A%84%E9%93%BE%E6%8E%A5%E4%BA%8C%E7%BB%B4%E7%A0%81%E6%A0%BC%E5%BC%8Fvmessbase64%E7%BC%96%E7%A0%81%E7%9A%84json%E6%A0%BC%E5%BC%8F%E6%9C%8D%E5%8A%A1%E5%99%A8%E6%95%B0%E6%8D%AE)
+
+[提议制定 VMess 分享链接标准 · Issue #720 · v2ray/discussion (github.com)](https://github.com/v2ray/discussion/issues/720)

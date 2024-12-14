@@ -1,0 +1,250 @@
+---
+publishDate: 2023-05-05T00:00:00Z
+title: 'Python 多版本管理和虚拟环境管理: 入门到实践'
+excerpt: 安装和管理多个 Python 版本一直是个麻烦事, Python 在版本和依赖库管理方面的不足让使用虚拟环境变得尤为重要
+tags:
+  - dev
+---
+
+## 概述
+
+如果你用 Python 进行过一段时间的开发, 那么你很可能曾经被如何安装和管理多个 Python 版本而烦恼, 或者被不同项目之间的依赖库冲突而折磨. 本文将介绍使用 `pyenv` 安装和管理多个 Python 版本并在这些版本之间灵活切换, 使用 `virtualenv` 创建 Python 虚拟环境以便在不同项目的依赖项之间做隔离.
+
+很多人可能也知道使用虚拟环境的必要性, 也知道创建和使用虚拟环境的基本操作, 但还是被使用虚拟环境的繁琐操作所劝退, 于是还是把所有依赖装在全局环境里一把梭, 直到出问题才后悔. 因此本文还介绍了一些配合虚拟环境使用的实用工具, 简化其使用过程中的一些繁琐的重复工作.
+
+### 为什么不使用系统 Python
+
+很多系统都自带 Python, 那么为什么不使用系统自带的 Python?
+
+- 防止破坏系统环境
+    
+    部分系统功能可能依赖其自带的 Python 环境完成, 如果对该 Python 环境进行改动可能会影响系统功能
+    
+    某些 “Python 教程” 指导用户使用 `sudo pip` 命令来安装 Python 包, 这是非常不提倡的
+    
+- 用户对系统 Python 并没有太多控制权
+    
+    很多系统处于安全考虑并不允许用户对系统 Python 做太多修改, 例如 macOS 中卸载系统 Python 中的包就非常麻烦, 很多系统中要修改系统 Python 版本同样很麻烦. 此外, 系统升级时用户对系统 Python 作出的改动很可能并不会被保留
+    
+
+因此用系统 Python 做开发实在是一件非常危险且痛苦的事情, 尽可能避免使用系统 Python 进行开发.
+
+### 为什么不直接使用包管理器安装 Python 版本
+
+很多包管理器可以非常方便地安装不同版本的 Python, 例如 `apt`, `homebrew` 等, 但我还是不推荐用它们来安装多个版本的 Python:
+
+- 这些包管理器往往会将包安装到全局环境
+    
+    例如 `apt` , `yum` 等包管理器在安装时都需要超级管理员权限, 这在很多场景下本不需要的, 这些 Python 也不需要被安装到全局环境
+    
+- 版本切换不方便
+    
+    包管理器只负责安装, 往往并不会对后期的使用体验负责, 后期切换起来比较麻烦
+    
+
+`pyenv` 等工具本身就是为了管理多版本 Python 而发明的, 因此针对日常使用场景提供了很多实用工具.
+
+### 为什么要使用虚拟环境
+
+不同项目除了可能需要不同的 Python 版本以外, 还可能需要不同的依赖库. 不同项目可能对同一个依赖库要求不同的版本, A 项目与 B 项目的依赖还可能存在冲突, 如果将所有依赖都安装到全局 Python 中可能导致一些依赖问题, 并且这样做也不方便弄清楚某个项目到底需要哪些依赖.
+
+虚拟环境则可以将不同项目的依赖环境分离, 为每个项目创建一个干净的 Python 环境, 避免依赖冲突引起的各种问题并方便定位项目所需依赖.
+
+综上所述, 安装和管理不同的 Python 版本是重要的日常需求, 区分开发使用的 Python 版本, 避免使用系统 Python 也是保证系统安全稳定的必要条件; 在进行项目开发时, 建立虚拟环境对不同项目的依赖项做隔离是减少冲突的良好习惯.
+
+## 入门
+
+### 使用 `pyenv` 安装和管理多个 Python 版本
+
+`pyenv` 提供了管理多个 Python 版本的解决方案:
+
+- 将 Python 安装到用户空间
+- 安装多个版本的 Python
+- 指定 Python 版本
+- 在版本间便捷切换
+
+#### 安装
+
+安装相关依赖, 不同平台可能略有区别, 具体参考:
+
+[Managing Multiple Python Versions With pyenv – Real Python](https://realpython.com/intro-to-pyenv/#installing-pyenv)
+
+推荐使用一键脚本安装:
+
+```bash
+$ curl https://pyenv.run | bash
+```
+
+安装完成后可能会有一些提示, 提示用户将 `pyenv` 添加到 PATH, 跟随提示操作即可, 例如:
+
+```bash
+WARNING: seems you still have not added 'pyenv' to the load path.
+
+Load pyenv automatically by adding
+the following to ~/.bashrc:
+
+export PATH="$HOME/.pyenv/bin:$PATH"
+eval "$(pyenv init -)"
+eval "$(pyenv virtualenv-init -)"
+```
+
+#### 用法
+
+安装和卸载:
+
+```bash
+# 查看 3.6-3.8 之间的所有 Python 版本
+$ pyenv install --list | grep " 3\.[678]"
+
+# 安装
+$ pyenv install 3.6.1
+# 卸载
+$ pyenv uninstall 3.6.1
+```
+
+`pyenv` 提供四个层级的 Python 版本管理:
+
+- System Python: 系统默认,一般在 `/usr/bin` 等目录, 从 PATH 变量中找到
+- pyenv global: 通过 `pyenv global <version>` 设置, 由 `~/.pyenv/version` 指定
+- pyenv local: 通过 `pyenv local <version>` 设置, 由 `~/.python-version` 指定
+- pyenv shell: 通过 `pyenv shell <version` 设置, 由环境变量 `$PYENV_VERSION` 指定, 仅对当前 session 有效
+
+以上都可以使用 `pyenv <scope> --unset` 取消设定.
+
+使用如下命令查看 Python 版本:
+
+```bash
+# 查看所有版本
+$ pyenv versions
+# 查看当前版本
+$ pyenv version
+# 查看当前可执行文件目录
+$ pyenv which pip
+```
+
+`pyenv` 实际上也自带了一个虚拟环境管理工具:
+
+```bash
+$ pyenv virtualenv
+```
+
+### 使用 `virtualenv` 创建和管理虚拟环境
+
+#### 安装
+
+使用 `pip` 安装:
+
+```bash
+$ python -m pip install --user virtualenv
+```
+
+很多人可能习惯直接输入 `pip install <pacakge-name` 来安装包, 但这样如果系统路径设置有问题, 可能会出现 `pip` 对应 Python 版本与 `python` 命令对应的 Python 版本不一致的情况, 从而出现虽然装过某个包, 但是实际用起来却还是找不到这个包的情况.
+
+因此, 推荐使用 `python -m pip` 命令来安装软件包.
+
+#### 用法
+
+创建虚拟环境:
+
+```bash
+$ python -m venv <venv-name>
+```
+
+执行后会在当前目录下创建 `<venv-name>` 目录, 其中就是虚拟环境的相关文件.
+
+使用方法:
+
+```bash
+# 激活
+$ source <venv-name>/bin/activate
+
+# 在虚拟环境中安装软件包
+$ python -m pip install <package-name>
+
+# 退出
+$ deactive
+```
+
+除了使用 `python -m venv` 命令以外, 还可以使用 `python -m virtualenv` 命令, 该命令相比 `venv` 提供了更人性化的输出以及一些实用性方面的改进.
+
+#### 补充
+
+还有很多工具可以创建虚拟环境, 例如上文中提到的 `pyenv` 自带的 `pyenv virtualenv` , `conda` 也提供创建虚拟环境的功能.
+
+## 实践
+
+### zsh 插件自动切换虚拟环境
+
+虚拟环境虽好, 但是创建, 管理起来还是有点麻烦, 尤其是每次启用时还要激活环境. 略显繁琐的流程也成了劝退一些人的理由之一. 如果你是 zsh 用户, `zsh-autoswitch-virtualenv` 插件可以将一些工作自动化, 让虚拟环境的使用过程变得无痛.
+
+插件地址:
+
+[MichaelAquilina/zsh-autoswitch-virtualenv: 🐍 ZSH plugin to automatically switch python virtualenvs (including pipenv and poetry) as you move between directories (github.com)](https://github.com/MichaelAquilina/zsh-autoswitch-virtualenv/)
+
+基本用法:
+
+```bash
+# 创建虚拟环境
+$ mkvenv
+
+# 删除虚拟环境
+$ rmvenv
+```
+
+该插件采用一种面向项目的管理逻辑, 对于每个目录, 执行 `mkvenv` 后会创建一个名称为 `<目录名>-<随机字符>` 的虚拟环境, 并且进入项目目录后会自动激活对应虚拟环境, 退出该目录后又会自动退出该环境, 这样一来不需要任何额外操作就可以使用虚拟环境.
+
+如果要与 `pyenv` 一起使用, 注意要让 `virtualenv` 命令对应的 Python 版本与 `pyenv` 对应 Python 版本一致, 一般而言使用 `python -m install virtualenv` 安装之后 `pyenv` 会自动设置 `virtualenv` 路径 `$HOME/.pyenv/shims/virtualenv` .
+
+> 纠正之前的一个误区
+> 
+
+部分 Python 命令行工具可以使用 `pip` 安装. 如果 `pip` 是直接从 shim 运行的, 那么 `pyenv` 会对安装的命令行工具自动 shim. 但是 `python -m pip` 并不会从 shim 运行 `pip` , 而是将 `pip` 当成 Python 的一个模块库, 并运行该模块库相关的脚本.
+
+所以, 要让 `pyenv` 自动创建 shim, 直接用 `pip` 运行而不是 `python -m pip` .
+
+另外其实还有个方法, 运行 `pyenv rehash` 即可重新创建所有的 shim.
+
+[python -m pip install does not create shims · Issue #2243 · pyenv/pyenv](https://github.com/pyenv/pyenv/issues/2243)
+
+### `pyenv` 使用国内源
+
+使用 `pyenv` 安装某个版本的 Python 时, 它默认从 Python 官网下载 Python, 在国内网络环境下可能会速度慢甚至下载失败, 换用国内源则可以提升体验.
+
+`pyenv` 提供了一些环境变量用于自定义 build 阶段行为, 其中 `PYTHON_BUILD_MIRROR_URL` 变量可以修改下载 Python 二进制包的 URL.
+
+例如要安装 `3.8.5` 版本的 Python, 默认从 [`https://www.python.org/ftp/python/3.8.5/Python-3.8.5.tar.xz`](https://www.python.org/ftp/python/3.8.5/Python-3.8.5.tar.xz) 下载, 淘宝镜像则可以从 [`https://registry.npmmirror.com/-/binary/python/3.9.15/Python-3.8.5.tar.xz`](https://registry.npmmirror.com/-/binary/python/3.9.15/Python-3.9.15.tar.xz) 下载, 因此可以这样设置环境变量:
+
+```bash
+export PYTHON_BUILD_MIRROR_URL="[https://registry.npmmirror.com/-/binary/python/](https://registry.npmmirror.com/-/binary/python/3.9.15/Python-3.9.15.tar.xz)"
+export PYTHON_BUILD_MIRROR_URL_SKIP_CHECKSUM=1
+```
+
+其中设置第二条是跳过 checksum 检验, 防止一些镜像站提供的文件 checksum 不一致导致下载失败.
+
+可以将如上两条添加到 `~/.zshrc` 等文件中, 这样 `pyenv` 安装时就会从国内镜像下载 Python 二进制文件, 体验能提升不少.
+
+另外, 也可以使用教育网镜像 [`https://mirrors.cernet.edu.cn/python/`](https://mirrors.cernet.edu.cn/python/) , 它整合了国内很多大学的镜像站, 并且会根据网络环境自动选择合适的镜像源.
+
+网上一些帖子先把 Python 二进制文件下载到 `~/.pyenv/cache` 目录曲线救国, 其实设置环境变量就行, 不用这么麻烦.
+
+## 参考
+
+关于 `pyenv` 的使用可以参考 RealPython 上的教程:
+
+[Managing Multiple Python Versions With pyenv – Real Python](https://realpython.com/intro-to-pyenv/)
+
+项目主页上关于该项目如何工作也有比较详细的说明:
+
+[pyenv/pyenv: Simple Python version management (github.com)](https://github.com/pyenv/pyenv)
+
+关于 `pyenv` 在 build 阶段设置环境变量自定义一些行为参考:
+
+[pyenv/README.md at master · pyenv/pyenv (github.com)](https://github.com/pyenv/pyenv/blob/master/plugins/python-build/README.md#special-environment-variables)
+
+关于 Python 虚拟环境同样可以参考 RealPython 教程:
+
+[Python Virtual Environments: A Primer – Real Python](https://realpython.com/python-virtual-environments-a-primer/)
+
+`virtualenv` 的项目 wiki:
+
+[virtualenv (pypa.io)](https://virtualenv.pypa.io/en/latest/)

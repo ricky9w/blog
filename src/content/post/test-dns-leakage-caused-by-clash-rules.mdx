@@ -1,0 +1,253 @@
+---
+publishDate: 2023-03-31T01:00:00Z
+title: 检测 Clash 的规则配置是否产生 DNS 泄漏
+excerpt: 不正确的 Clash 规则配置可能导致 DNS 泄漏, 从而导致隐私问题. 这里介绍一种简单的实验方法检测 Clash 规则导致的 DNS 泄漏问题
+tags:
+  - network
+  - GFW
+---
+
+## 什么是 DNS 泄漏
+
+引用维基百科上的介绍:
+
+> A **DNS leak** refers to a security flaw that allows [DNS](https://en.wikipedia.org/wiki/DNS) requests to be revealed to [ISP](https://en.wikipedia.org/wiki/ISP) DNS servers, despite the use of a [VPN](https://en.wikipedia.org/wiki/VPN) service to attempt to conceal them.[[1]](https://en.wikipedia.org/wiki/DNS_leak#cite_note-1) Although primarily of concern to VPN users, it is also possible to prevent it for [proxy](https://en.wikipedia.org/wiki/Proxy_server) and direct internet users.
+The vulnerability allows an ISP, as well as any on-path [eavesdroppers](https://en.wikipedia.org/wiki/Eavesdropping#Network_attacks), to see what [websites](https://en.wikipedia.org/wiki/Website) a user may be visiting. This is possible because the browser's DNS requests are sent to the ISP DNS server directly, and not sent through the VPN.
+> 
+
+[DNS leak - Wikipedia](https://en.wikipedia.org/wiki/DNS_leak)
+
+简单来说, 就是你在使用 VPN 或者代理软件上网时, 你的 ISP (互联网服务提供商, 例如三大运营商, 单位网络) 甚至窃听者仍然可以获悉你访问的网址, 从而导致隐私泄漏.
+
+本文无意讨论如何保护你的所有 DNS 请求都不被 ISP 获知, 这几乎与完全在世界上隐匿踪迹一样困难, 且很多时候可能需要以牺牲体验为代价, 而是仅仅探讨在代理上网场景下防止某些特定 DNS 查询泄漏的问题, 即:
+
+如何在使用代理科学上网的场景下, 保证对一些被封禁域名 (比如 [`google.com`](http://google.com) ) 的查询不被 ISP 所获悉.
+
+DNS 泄漏的风险经常被忽视. 对于正常上网行为而言, DNS 查询记录确实没什么隐藏的必要, 但是对于科学上网时访问的一些域名的查询记录, 我们还是不想它们被泄漏, 毕竟…先生, 你也不想上班时访问…被知道吧(误).
+
+此外, 国内 DNS 环境中普遍存在的 DNS 污染问题也令人感到困扰. 比如你将 [`google.com`](http://google.com) 的 DNS 查询发往国内 DNS 服务器, 那么得到的大概率是被污染的结果, 轻则导致网页无法打开, 重则会被劫持到奇怪的网站. 不知道你有没有经历过, 访问 Google 时得到一个看起来和 Google 极为相似的网页, 但是浏览器报证书错误, 这种情况有可能就是你被劫持到了高仿的 Google 网站.
+
+要避免以上提到的情况, 最关键的就是用国外的 DNS 服务解析国外网站, 不要用国内 DNS 服务器解析这类网站.
+
+## Clash 的 DNS 请求逻辑
+
+> 由于 Clash 已经放弃 `redir-host` 模式, 这里仅仅介绍 `fake-ip` 模式下的 DNS 请求逻辑
+> 
+
+要分析 Clash 是否会产生 DNS 泄漏, 首先得了解 Clash 是如何处理 DNS 问题的.
+
+### Clash 的 DNS 配置
+
+Clash 的 DNS 配置部分有三类 DNS 服务器, 分别用于不同的用途:
+
+```go
+dns:
+  default-nameserver:
+    - 114.114.114.114
+    - 8.8.8.8
+  nameserver:
+    - 114.114.114.114 # default value
+    - 8.8.8.8 # default value
+    - tls://dns.rubyfish.cn:853 # DNS over TLS
+    - https://1.1.1.1/dns-query # DNS over HTTPS
+    - dhcp://en0 # dns from dhcp
+    # - '8.8.8.8#en0'
+  fallback:
+    - tcp://1.1.1.1
+    - 'tcp://1.1.1.1#en0'
+```
+
+[Configuration · Dreamacro/clash Wiki (github.com)](https://github.com/Dreamacro/clash/wiki/Configuration)
+
+- `default-nameserver` : 仅仅用于解析下面 `nameserver` 和 `fallback` 中 DNS 服务器的域名, 例如 `nameserver` 中配置了 [`https://dns.google.com/dns-query`](https://dns.google.com/dns-query) , 那么 `dns.google.com` 就是用 `default-nameserver` 里的服务器来解析的, 也因为如此, `default-nameserver` 仅支持纯 IP 的 DNS 服务器
+- `nameserver` 和 `fallback` : Clash 进行本地 DNS 请求时将并行向两组服务器发起请求, 选择其中速度最快的一个; 如果返回的结果是国内 IP (根据 IP 数据库判断) 则采用 `nameserver` 组返回的结果, 反之则采用 `fallback` 组返回的结果
+
+当然, 这里忽略了 `fallback-filter` 等配置, 关于这些配置的用法参考上面链接中的 Clash 文档.
+
+### Fake-ip 模式下的 DNS 处理过程
+
+Fake-ip 模式下, Clash 维护了一个 fake-ip pool, 默认是 `198.18.0.1/16` , 选用这个保留地址以防止与真实的 IP 地址发生冲突.
+
+下面以浏览器访问 [`google.com`](http://www.google.com) 为例模拟 DNS 处理和连接建立的过程, 主要分为两种情况.
+
+#### 命中域名规则
+
+如果你的规则类似这样:
+
+```yaml
+rules:
+	- DOMAIN-SUFFIX,baidu.com,DIRECT
+	- DOMAIN,google.com,Proxy
+	- GEOIP,CN,DIRECT
+	- IP-CIDR,127.0.0.0/8,DIRECT
+	- MATCH,Proxy
+```
+
+Clash 直接从 fake-ip pool 中取出一个 IP 地址返回给浏览器, 同时建立起这个 IP 和 [`google.com`](http://google.com) 的映射关系, 直接将带有域名的请求发给远端服务器, 并不会在本地发起 DNS 请求.
+
+显然, 这种情况下也是不会产生 DNS 泄漏和受到 DNS 污染的影响的.
+
+#### 未命中域名规则
+
+如果去掉上面规则中的 `DOMAIN,google.com,Proxy` , 变为:
+
+```yaml
+rules:
+	- DOMAIN-SUFFIX,baidu.com,DIRECT
+	- GEOIP,CN,DIRECT
+	- IP-CIDR,127.0.0.0/8,DIRECT
+	- MATCH,Proxy
+```
+
+那么 Clash 在收到请求后还是直接返回一个 fake-ip, 这一点与上面的情况是一样的, 随后开始进行规则匹配.
+
+在第一条匹配失败时会来到 `GEOIP,CN,DIRECT` , 但是 Clash 此时并不知道 [`google.com`](http://google.com) 的 IP 地址, 于是进行一次本地 DNS 请求, Clash 采纳 `fallback` 组中返回的正确的 IP 地址, 但是仍然匹配不上 `GEOIP` 和 `IP-CIDR` 两条规则, 最后命中 `MATCH` 规则, Clash 将带有域名信息的请求发往代理服务器, 由代理服务器进行 DNS 解析并访问.
+
+可以看到, 即使存在 DNS 污染, fake-ip 模式下用户仍然可以正常访问 Google, 但是这次发生了 DNS 泄漏!
+
+复盘一下, 匹配 IP 类规则时, Clash 并不知道域名对应的 IP 是多少, 而如果这条 IP 类规则没有加上 `no-resolve` 选项, Clash 则会进行一次本地 DNS 解析, 这就导致了 DNS 泄漏.
+
+### DNS 处理过程中的风险
+
+看完了上面的 DNS 请求过程分析, 下面简单总结一下 Clash 在 fake-ip 模式下面临的 DNS 污染和 DNS 泄漏两种风险.
+
+#### DNS 污染
+
+从上面的分析过程可以看出, 在 fake-ip 模式下, 即使有 DNS 污染的存在用户也可以正常访问被禁止的网站, 因为浏览器拿到的仅仅是一个 fake-ip, Clash 也并不会直接拿 DNS 解析结果发起连接, 本地 DNS 解析仅仅是为了进行规则匹配.
+
+这样顺便带来了一个好处: 访问境外网站时, 代理服务器端进行 DNS 解析并发连接, 因此相当于做了 CDN 优化.
+
+#### DNS 泄漏
+
+1. 进行域名匹配时不会进行本地 DNS 解析, 如果让域名规则尽可能涵盖日常访问的境外域名则可以大大减少 DNS 泄漏的风险
+2. 在进行规则匹配时, 如果在 IPCIDR 类规则后面不加 `no-resolve` 选项, 则会在这里进行本地解析, 而一般在 nameserver 中都会配置国内 DNS 服务器, 因此这些 DNS 请求就被发给了国内的 DNS 服务器提供商
+3. 在 nameserver 中配置国内公共 DNS 服务器可以一定程度上改善 DNS 泄漏问题, 例如在单位内网, 你的 DNS 请求将不会直接发给单位 DNS 服务器. 但是 DNS 默认的请求方式是基于 UDP 协议的明文传输, 因此中间人完全有能力查看你的 DNS 请求的内容, 抢答或者篡改 DNS 结果, 因此在 nameserver 中配置一般的公共 DNS 并不能完全避免 DNS 泄漏, 使用 DoH, DoT 等服务则能防止 ISP 和中间人窃听 DNS, 这样只有公共 DNS 服务提供商能看到你的 DNS 请求
+
+## 如何检测 DNS 泄漏
+
+铺垫了许多, 终于来到本文的正题, 如何检测 DNS 泄漏. 本文中使用大家喜闻乐见的 [`ipleak.net`](http://ipleak.net) 网站来检测 DNS 泄漏.
+
+### 网站检测原理
+
+[`ipleak.net`](http://ipleak.net) 等网站是如何检测 DNS 泄漏的? 这里有一个解释:
+
+> The DNS leak test works by sending your client a series of domain names to resolve within a specific test domain. Each request is sent from your client to your configured DNS server. Even if you have configured a single DNS server, there may be many other servers that the request is passed on to in order to be resolved (normally to load balance the requests). For example if you configure Google DNS then you will often find 6-10 Google DNS servers which are fullfilling the DNS requests.
+> 
+
+[DNS leak test](https://www.dnsleaktest.com/what-is-the-difference.html)
+
+网站向你发送一批随机生成的域名, 例如 [`dlmkt3xnzksuig23u2mpeqgl4q8tpur4phx709nb-4.ipleak.net`](http://dlmkt2xnzksuig73u2mpbegl4q8tpur4phx709nb-4.ipleak.net/) , 浏览器发起对这些域名的 DNS 请求, 网站找到有哪些 DNS 服务器响应了用户的这些请求. 由于用于查询的域名是随机生成且对每个用户独特的, 因此可以根据域名反推用户.
+
+### DNS 泄漏检测
+
+首先对 Clash 的 DNS 进行如下配置 (为什么这样配置后面解释):
+
+```yaml
+dns:
+  nameserver:
+    - 119.29.29.29
+  fallback:
+    - tls://cloudflare-dns.com:853
+    - tls://dns.google:853
+    - https://dns.google/dns-query
+    - https://1.1.1.1/dns-query
+```
+
+其次将 `DOMAIN-SUFFIX,ipleak.net,Proxy` 插入到你原来的规则中, 例如:
+
+```yaml
+rules:
+  - RULE-SET,Reject,REJECT
+  # 在 Reject 处下方插入规则, 匹配 Reject 规则时是否发生了 DNS 泄漏
+  - DOMAIN-SUFFIX,ipleak.net,Proxy
+
+  - RULE-SET,Special,DIRECT
+  - RULE-SET,Netflix,Proxy
+  - RULE-SET,Spotify,Proxy
+  - RULE-SET,YouTube,Proxy
+  - RULE-SET,Disney Plus,Proxy
+  # ...
+```
+
+这种方法的原理是:
+
+如前文所述, [`ipleak.net`](http://ipleak.net) 进行 DNS 泄漏检测时驱动浏览器发起的域名后缀都是 `ipleak.net` , 使用 `DOMAIN-SUFFIX` 规则覆盖 `*.ipleak.net` 的请求.
+
+这样一来, 如果在手动添加的这条规则之前 Clash 进行了本地 DNS 解析, 那么就可以在网页中看到腾讯的 DNS 服务器地址 (之所以使用且仅用腾讯的 DNS 就是为了方便这里识别).
+
+反之如果在此之前没有进行本地 DNS 解析, 则网页上看到的 DNS 服务器应该都是境外服务器 (都是代理服务器在进行 DNS 解析).
+
+没有 DNS 泄漏的情况 (全部是境外 DNS 服务器)
+
+![没有 DNS 泄漏的情况](https://pub-08e622affc724f6995dfba190365498d.r2.dev/UWqdxSFfvMuDARw.webp)
+
+可能有 DNS 泄漏的情况 (可以看到腾讯 DNS 服务器):
+
+![可能出现 DNS 泄漏的情况](https://pub-08e622affc724f6995dfba190365498d.r2.dev/UWqfzSMZfnr690h.webp)
+
+这种方法事实上还提供了一种类似于断点调试的思路, 把 `DOMAIN-SUFFIX,ipleak.net,Proxy` 这条规则插入到任意一处规则下面, 可以检测匹配到这条规则之前是否产生 DNS 泄漏.
+
+当然, 检测 DNS 泄漏最直接的方法还是肉眼审查或者抓包分析, 以上只是在此之外提供一种思路.
+
+## 常见规则集的 DNS 泄漏问题
+
+很多规则集有广告过滤功能, 即收集一些广告域名/IPCIDR, 直接匹配 REJECT 策略, 达到去广告的目的, 并且广告规则集往往放在第一条.
+
+例如 `dler-io/Rules` 规则:
+
+```yaml
+rules:
+  - RULE-SET,Reject,AdBlock
+  - RULE-SET,Special,DIRECT
+  # ...
+
+rule-providers:
+  Reject:
+    type: http
+    behavior: classical
+    url: 'https://dler.cloud/Rules/Clash/Provider/Reject.yaml'
+    path: ./Rules/Reject
+    interval: 86400
+  Special:
+    type: http
+    behavior: classical
+    url: 'https://dler.cloud/Rules/Clash/Provider/Special.yaml'
+    path: ./Rules/Special
+    interval: 86400
+  # ...
+```
+
+检查 [`https://dler.cloud/Rules/Clash/Provider/Reject.yaml`](https://dler.cloud/Rules/Clash/Provider/Reject.yaml) 可以发现, 其中既有 domain 类规则又有 ipcidr 类规则, 且 ipcidr 类规则后面并没有加上 `no-resolve` , 例如:
+
+```yaml
+payload:
+  # ...
+  - DOMAIN-SUFFIX,yuedu.iqiyi.com
+  # - URL-REGEX,https?:\/\/.+\/videos\/other\/.+
+  # - URL-REGEX,https?:\/\/paopao\w?\.qiyipic\.com
+  - IP-CIDR,101.227.97.240/32
+  - IP-CIDR,101.227.200.11/32
+  - IP-CIDR,101.227.200.28/32
+  - IP-CIDR,124.192.153.42/32
+  # ...
+```
+
+在规则匹配时匹配到这里会进行本地 DNS 解析, 导致 DNS 泄漏.
+
+维护规则集是一件很麻烦的事情, 我们在感谢规则集维护者的劳动的同时也需要对规则做一些审查, 修正其中的一些漏洞.
+
+如何合理地编写规则和进行 DNS 配置是一个比较复杂的话题, 鉴于本文篇幅, 这部分内容另开一篇:
+
+[通过合理的 Clash DNS 和规则配置对抗 DNS 污染和泄漏 (rikko.top)](https://rikko.top/combat-dns-pollution-and-leakage-through-reasonable-configuration-of-clash-dns-and-rules)
+
+## 参考
+
+不良林的系列视频生动地讲解和演示了 Clash 和一些其他代理软件的 DNS 处理过程, 如果觉得本文中对此过程的介绍过于抽象可以参考:
+
+[【进阶•DNS泄漏篇】竟能提速降延迟！再也不用担心DNS污染了！90%以上的人都存在DNS泄露！会有什么安全问题？如何解决代理中的DNS泄漏问题？以及WebRTC绕过代理泄漏本机真实IP，看完就知道了 - YouTube](https://www.youtube.com/watch?v=fqREM6b25SY&ab_channel=%E4%B8%8D%E8%89%AF%E6%9E%97)
+
+Sukka 的博客文章对于代理环境下的 DNS 行为有详细深入的介绍:
+
+[浅谈在代理环境中的 DNS 解析行为 | Sukka's Blog (skk.moe)](https://blog.skk.moe/post/what-happend-to-dns-in-proxy/)
+
+[我有特别的 DNS 配置和使用技巧 | Sukka's Blog (skk.moe)](https://blog.skk.moe/post/i-have-my-unique-dns-setup/)

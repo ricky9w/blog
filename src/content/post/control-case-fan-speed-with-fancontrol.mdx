@@ -1,0 +1,79 @@
+---
+publishDate: 2023-03-17T00:00:00Z
+title: 使用 FanControl 控制机箱风扇转速
+excerpt: 主板 BIOS 中默认的转速控制策略功能比较有限, FanControl 则可以根据丰富的温度源设定各种强大的转速控制策略
+tags:
+  - hardware
+  - tools
+---
+
+## 概述
+
+主板自带的风扇温控只能通过 CPU 温度调节风扇转速, 这就带来了尴尬:
+
+- 平时办公希望电脑尽可能安静, 因此转速曲线需要尽可能压低
+- 玩游戏的时候 CPU 摸鱼, 因此温度也不会太高, 但是如果风扇转速还是很低, 显卡温度会很高
+
+一种解决方案是做两套转速曲线, 玩游戏和办公两种场景下手动切换, 但还是麻烦.
+
+有没有什么方案能根据 GPU 温度调节机箱风扇转速呢?
+
+FanControl 就是这么一个能根据 GPU (以及其他传感器) 温度来调节机箱风扇转速的开源软件.
+
+## 基础设置
+
+下载后 FanControl 会自动完成风扇监测, 你可以根据实际情况给风扇加上备注.
+
+下方可以创建各种转速控制策略, 我主要用了两种:
+
+- `Graph` : 自定义转速曲线图, 与很多主板 BIOS 里的手动调节方式是一样的
+    
+    一般而言, 低温区间转速可以稍微压低一点, 这样在日常办公场景下大部分时间都会比较安静
+    
+    高温区间转速拉高, 保证高负载下的性能表现
+    
+- `Mix` : 可以综合多种温控策略. 例如我自己添加了 CPU 和 GPU 两个 Graph, 然后添加了一个 Mix 策略, Function 选择 Max, 这样风扇转速将会取两个 Graph 中的最高者
+
+此外还有 `Sync` 等控制策略, 可以以某一个风扇的转速控制策略为基准, 在它的基础上做偏移.
+
+更多的控制策略可以自行探索.
+
+设置好控制策略之后, 在上方的风扇配置中选择下方配置好的策略即可.
+
+![风扇传感器](https://pub-08e622affc724f6995dfba190365498d.r2.dev/UWqg6ukNWCa1UHl.webp)
+
+![风扇曲线](https://pub-08e622affc724f6995dfba190365498d.r2.dev/UWqg70OmjQjHvJH.webp)
+
+## 插件设置
+
+FanControl 支持通过插件来拓展软件能力. 例如 FanControl 无法获取某些硬件温度, 此时可以配合 HWInfo64 插件, 通过 HWInfo64 来获取对应硬件的温度.
+
+README 中有一个插件列表:
+
+[Rem0o/FanControl.Releases: This is the release repository for Fan Control, a highly customizable fan controlling software for Windows. (github.com)](https://github.com/Rem0o/FanControl.Releases#plugins)
+
+各个插件的使用方法参见插件使用说明.
+
+以我自己为例, FanControl v149 版本下无法获取 Intel Arc A750 显卡温度, 因此使用 HWInfo64 插件来获取其温度.
+
+首先安装 HWInfo64, 具体安装过程和使用方法可以参考:
+
+[HWiNFO Setup for a Beginner : pcmasterrace (reddit.com)](https://www.reddit.com/r/pcmasterrace/comments/614f5d/hwinfo_setup_for_a_beginner/)
+
+安装完成后找到插件主页:
+
+[Rem0o/FanControl.HWInfo: FanControl plugin to import HWInfo sensors. (github.com)](https://github.com/Rem0o/FanControl.HWInfo)
+
+从 Release 页面下载插件, 解压后将 `FanControl.HWInfo.dll` 复制到 FanControl 的 `Plugins` 文件夹, 重启软件后在右上角 `Sensor Settings - Plugins` 启用 `HWInfo` 插件.
+
+打开 HWInfo64, 在 `Configure Sensors - HWInfo Gadget` 中对自己要监控的数据勾选 `Enable reporting to Gadget` 和 `Report value in Gadget` 即可.
+
+注意, 某些情况下可能出现 Windows 系统出于安全考虑锁定插件 dll, 此时右击打开文件属性, 取消勾选 `block` 选项即可.
+
+正确配置后即可在 FanControl 中看到 HWInfo 里传来的信息.
+
+参考:
+
+[No Intel Arc's temperature · Issue #1436 · Rem0o/FanControl.Releases (github.com)](https://github.com/Rem0o/FanControl.Releases/issues/1436)
+
+[Unable to Load Plugin HWInfo · Issue #592 · Rem0o/FanControl.Releases (github.com)](https://github.com/Rem0o/FanControl.Releases/issues/592)

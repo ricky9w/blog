@@ -1,0 +1,105 @@
+---
+publishDate: 2022-10-29T00:00:00Z
+title: 借助 hyperlink 宏包优雅地在 LaTeX 文档中插入超链接
+excerpt: 借助 hyperlink 宏包在 LaTeX 文档中插入超链接, 避免网址中特殊符号导致的美观和编译错误
+tags:
+  - latex
+---
+
+偶尔需要在 LaTeX 文档中插入网址. 但是 URL 编码往往很长而且复杂, 并带有各种特殊符号, 直接放在文档里既不美观, 也经常在编译时导致错误. 借助 `hyperlink` 宏包的帮助可以在 LaTeX 文档中插入超链接, 避免直接放 URL 带来的种种问题.
+
+## 基本配置
+
+导入宏包并设置链接样式:
+
+```latex
+\usepackage{hyperref} % 使用宏包
+
+% 设置链接样式
+\hypersetup{
+    colorlinks = true,
+    linkcolor=blue,
+    filecolor=blue,      
+    urlcolor=blue,
+    citecolor=cyan,
+}
+```
+
+如果不想让超链接显示为其他颜色可以将 `colorlinks` 设置为 false.
+
+链接样式有很多项目可以自定义, 参考下表:
+
+| **Option** | **Default value** | **Description** |
+| --- | --- | --- |
+| `hyperindex` | true | Makes the page numbers of index entries into hyperlinks |
+| `linktocpage` | false | Makes the page numbers instead of the text to be link in the Table of contents. |
+| `breaklinks` | false | Allows links to be broken into multiple lines. |
+| `colorlinks` | false | Colours the text for links and anchors, these colours will appear in the printed version |
+| `linkcolor` | red | Colour for normal internal links |
+| `anchorcolor` | black | Colour for anchor (target) text |
+| `citecolor` | green | Colour for bibliographical citations |
+| `filecolor` | cyan | Colour for links that open local files |
+| `urlcolor` | magenta | Colour for linked URLs |
+| `frenchlinks` | false | Use small caps instead of colours for links |
+
+针对 PDF 输出也有很多定义选项:
+
+| **Option** | **Default value** | **Description** |
+| --- | --- | --- |
+| `bookmarks` | true | Acrobat bookmarks are written, similar to the table of contents. |
+| `bookmarksopen` | false | Bookmarks are shown with all sub-trees expanded. |
+| `citebordercolor` | 0 1 0 | Colour of the box around citations in RGB format. |
+| `filebordercolor` | 0 .5 .5 | Colour of the box around links to files in RGB format. |
+| `linkbordercolor` | 1 0 0 | Colour of the box around normal links in RGB format. |
+| `menubordercolor` | 1 0 0 | Colour of the box around menu links in RGB format. |
+| `urlbordercolor` | 0 1 1 | Colour of the box around links to URLs in RGB format. |
+| `pdfpagemode` | empty | Determines how the file is opened. Possibilities are UseThumbs (Thumbnails), UseOutlines (Bookmarks) and FullScreen. |
+| `pdftitle` |  | Sets the document title. |
+| `pdfauthor` |  | Sets the document Author. |
+| `pdfstartpage` | 1 | Determines on which page the PDF file is opened. |
+
+注意: `hyperlink` 宏包包含对很多 LaTeX 命令的重新定义, 因此在导入顺序上应当尽可能晚, 防止其中重新定义的命令又被其他宏包覆盖. 不过也有一些宏包需要在 `hyperlink` 之后导入:
+
+[Which packages should be loaded after hyperref instead of before? - TeX - LaTeX Stack Exchange](https://tex.stackexchange.com/questions/1863/which-packages-should-be-loaded-after-hyperref-instead-of-before)
+
+## 插入链接
+
+两种方式:
+
+```latex
+\href{https://www.google.com}{Google}
+
+\url{https://www.google.com}
+
+\href{mailto:my@example.com}{my@example.com}
+```
+
+对于邮箱地址, 可以在前面加上 `mailto:` , 这样点击该链接可以直接打开系统默认邮件软件发送邮件.
+
+上面的代码排版效果如下:
+
+![正文链接排版效果](https://pub-08e622affc724f6995dfba190365498d.r2.dev/UWqg6qRDzk77kPH.webp)
+
+在参考文献中插入超链接:
+
+```latex
+% file: main.tex
+Introduction to LaTeX\cite{enwiki:1023081178}.
+
+% file: ref.bib
+@misc{ enwiki:1023081178,
+    author = "{Wikipedia contributors}",
+    title = "LaTeX --- {Wikipedia}{,} The Free Encyclopedia",
+    year = "2021",
+    url = "https://en.wikipedia.org/w/index.php?title=LaTeX&oldid=1023081178",
+    note = "[Online; accessed 10-July-2021]. \url{https://en.wikipedia.org/w/index.php?title=LaTeX&oldid=1023081178}"
+}
+```
+
+排版效果如下:
+
+![参考文献链接排版效果](https://pub-08e622affc724f6995dfba190365498d.r2.dev/UWqg6o2CBKl08dT.webp)
+
+## 参考
+
+[Hyperlinks - Overleaf, Online LaTeX Editor](https://www.overleaf.com/learn/latex/Hyperlinks)
