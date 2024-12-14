@@ -2,7 +2,7 @@ site:
   name: Ricky's Blog
   site: 'https://blog.rezo.fun'
   base: '/'
-  trailingSlash: false
+  trailingSlash: true
 
   googleSiteVerificationId: null # TODO: add google site verification id
 
