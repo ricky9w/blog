@@ -4,15 +4,15 @@ export const headerData = {
   links: [
     {
       text: '首页',
-      href: '/',
+      href: getPermalink('/', 'home'),
     },
     {
       text: '博客',
-      href: '/articles',
+      href: getBlogPermalink(),
     },
     {
       text: '关于',
-      href: '/about',
+      href: getPermalink('/about'),
     },
   ],
 };
