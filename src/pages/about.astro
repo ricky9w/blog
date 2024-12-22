@@ -1,6 +1,8 @@
 ---
 import Layout from '~/layouts/PageLayout.astro';
 import Content from '~/components/widgets/Content.astro';
+import Image from '~/components/common/Image.astro';
+import Button from '~/components/ui/Button.astro';
 
 const metadata = {
   title: '关于我',
@@ -8,14 +10,48 @@ const metadata = {
 ---
 
 <Layout metadata={metadata}>
-  <Content>
+  <!-- 移动端头像 -->
+  <div class="md:hidden mx-auto px-6 mt-10 mb-2">
+    <Image
+      src="https://www.gravatar.com/avatar/d298e14cd5f332e9c947a47d2f75f3aaf65ff020218c88193c48f37f5066c992?s=512"
+      alt="Avatar"
+      width={180}
+      height={180}
+      class="rounded-full mx-auto"
+    />
+  </div>
+
+  <Content
+    isReversed={true}
+    classes={{
+      container: 'pt-8 md:pt-8 lg:pt-8'
+    }}
+    image={{
+      src: 'https://www.gravatar.com/avatar/d298e14cd5f332e9c947a47d2f75f3aaf65ff020218c88193c48f37f5066c992?s=512',
+      alt: 'Avatar',
+      width: 280,
+      height: 280,
+      class: 'rounded-full hidden md:block'
+    }}
+  >
     <Fragment slot="content">
-      <h3 class="text-2xl font-bold tracking-tight dark:text-white sm:text-3xl mb-2">
+      <h1 class="text-2xl font-bold tracking-tight dark:text-white sm:text-3xl mb-2">
         关于我
-      </h3>
+      </h1>
       <div class="flex flex-col gap-3">
         <p>
           喜欢折腾, 热爱探索, 分享我的各种经历, 希望能帮到你!
+        </p>
+        <p>
+          Telegram Channel: 
+          <Button
+            variant="link"
+            target="_blank"
+            href="https://t.me/w_share"
+            icon="tabler:brand-telegram"
+          >
+            WShare
+          </Button>
         </p>
       </div>
     </Fragment>
