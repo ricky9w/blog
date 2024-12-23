@@ -1,0 +1,74 @@
+---
+publishDate: 2024-12-25T00:00:00Z
+title: 再次重构站点小记
+excerpt: 再次重构和迁移博客, 切换了主题、框架, 切换了部署平台, 重新寻找图床解决方案, 撰写博客的方式也发生了变化. 此外, 还为博客新增了基于 giscus 的讨论区和基于 Umami 的访客统计
+tags:
+  - front-end
+  - notes
+---
+
+为啥会想到重构博客? 前段时间偶然看到 [Ahrefs](https://ahrefs.com/) 这个 SEO 优化工具, 于是心血来潮扫了一下自己的博客 (基于 [Nobelium](https://github.com/craigary/nobelium) 主题构建). 不看不知道, 一看才知道 SEO 得分只有 40 分, 而且优化起来还挺麻烦. 索性重构一下博客, 正好试试心水了很久的 [AstroWind](https://github.com/onwidget/astrowind) 主题. 既然都重构博客了, 不如再添加点功能, 原来的博客没有数据统计也没有评论, 这次正好加上.
+
+## 大改造 - 把 AstroWind 变成博客主题
+
+其实 AstroWind 并不是一个用于博客的主题. 它是一个商业主题, 落地页、price 页等等一应俱全, 博客只是它其中的一个功能. 不过这些功能对我反而是累赘, 因此第一步就是做一些精简和优化.
+
+AI 在改造过程中帮了大忙. 其实之前一直拖着没有做博客重构就是嫌麻烦: 得重新熟悉一个项目, 做无数琐碎的修改. 而有了 AI 的帮助, 这个工作变得格外简单. Cursor + Claude 3.5 Sonnet, 三下五除二就完成了改造.
+
+## 部署到 Cloudflare Pages
+
+发布四年多, [Cloudflare Pages](https://pages.cloudflare.com/) 易用性越来越强了. 对于部署博客这样的简单任务, 只需要添加 GitHub 集成, Pages 就能在每次提交后自动从仓库拉取代码并执行构建. 支持的框架很多, Nextjs, Astro 这些更是不在话下.
+
+## 基于 giscus 的评论系统
+
+比较了当前比较流行的评论系统, 最终选择了 [giscus](https://github.com/giscus/giscus). 看中了它的简洁、轻量, 以及依托于 GitHub Discussion 来存储评论和用户鉴权 (缺点是无法匿名评论).
+
+部署同样简单, 按照 [giscuss.app](https://giscus.app/) 上的说明走即可: 输入仓库名称 (注意这里需要一个公共仓库, 如果不想让博客源码公开, 可以专门新建一个仓库给 giscus 用), 安装 [giscus GitHub app](https://github.com/apps/giscus) 下方各个选项根据自己喜好选择, 将提供的 `<script>` 标签放到页面模板的适当位置即可.
+
+## 基于 Umami 的访客统计
+
+之前的博客一直是靠 Cloudflare 和 Google Search Console 来看数据的, 但是前者不准, 后者只能看谷歌平台数据, 因此还是决定在网页中嵌入点访客统计.
+
+[Umami](https://umami.is) 是一个开源、现代化的统计系统, 选择它的理由有这几点:
+
+- 开源, 支持自部署, 数据收集较为克制
+- 包含对 SEO 非常关键的指标: referrer, 跳出率等
+- 好看 (我是颜狗.jpg)
+
+如果直接使用官方提供的云服务, 部署起来也很简单, [官方文档](https://umami.is/docs)有比较详细的说明.
+
+自部署则略微复杂, 需要部署前端和后端数据库. 官方文档的 [Hosting](https://umami.is/docs/guides/hosting) 章节提供了一些常见的部署方案的指导, 前端方面, [Vercel](https://vercel.com/)、[Railway](https://railway.com/) 这些都是支持的, 后端也支持 [Supabase](https://supabase.com/) 这些常用方案.
+
+关于 Umami 的自部署, 我还参考了这两篇博客文章:
+
+[使用 PaaS 服务部署 umami 统计工具的笔记 - 澄沨的漫游茶记](https://champhoon.xyz/note/serverless-umami/)
+
+[自建 Umami 统计的排雷记录——本地依赖库与 Cloudflare Workers 反代 | ChrAlpha's blog](https://blog.ichr.me/post/umami-minesweep/)
+
+部署完成之后其实还有不少可以微调改进的地方, 比如反代 Umami 脚本, 避免被 Ad Block 封禁; 比如进行一些配置避免自己从本地访问被统计进去等等. 具体操作网上有不少分享, 这里略过不表.
+
+## 基于 Cloudflare R2 的图床
+
+其实 Cloudflare 提供了 [Images](https://developers.cloudflare.com/images/) 来托管图片, 但是要钱 (上传 $5 / 100,000 张, 传输 $1 / 100,000); 而 Cloudflare R2 对于 10GB 以内的数据存储是免费的, 数据的传输也不收费. 出于白嫖考虑, 我还是选择了后者.
+
+关于二者的具体收费政策, 参考:
+
+[Pricing · Cloudflare Images docs](https://developers.cloudflare.com/images/pricing/)
+
+[Pricing · Cloudflare R2 docs](https://developers.cloudflare.com/r2/pricing/)
+
+出于优化图片体积的考虑, 我先将图片转换成 webp 格式再上传到 R2 存储, 这样不仅传输速度更快, 也更省空间.
+
+至于图片管理, ~现在就这么点图片要什么管理~, 以后图片多了再说, ~随便找个免费的图片转换工具转换完了扔到 R2 上算了.~
+
+## 使用 MDX 写博客
+
+[MDX](https://mdxjs.com/) 全称 Markdown for JSX, 支持 Markdown 的基本语法, 还可以直接用 JSX 写组件, 大大丰富了内容呈现形式.
+
+以前写组件或许还很麻烦, 现在有了 AI 的帮助, 糊出来一个组件也就是分分钟的事儿. 妈妈再也不用担心我的博客呈现能力弱啦.
+
+你可以在 MDX 提供的 [Playground](https://mdxjs.com/playground/) 体验 MDX 的各种特性.
+
+## 总结
+
+这次重构博客, 改变颇多, 最为核心的改变是, 所有模块都运行在第三方平台上, 而且完全免费. 于我而言, 个人博客这样的项目就适合这么托管, 一是不用自己运维, 二是免费, 要不然我很有可能会因为维护麻烦 or 不想付钱而把博客关了...
